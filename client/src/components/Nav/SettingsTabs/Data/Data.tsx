@@ -8,6 +8,7 @@ import React, { useState, useCallback, useRef } from 'react';
 import { useOnClickOutside } from '~/hooks';
 import DangerButton from '../DangerButton';
 import ImportConversations from './ImportConversations';
+import ExportConversations from './ExportConversations';
 
 export const RevokeKeysButton = ({
   showText = true,
@@ -79,6 +80,9 @@ function Data() {
         </div>
         <div className="border-b pb-3 last-of-type:border-b-0 dark:border-gray-700">
           <ImportConversations />
+        </div>
+        <div className="border-b pb-3 last-of-type:border-b-0 dark:border-gray-700">
+          <ExportConversations />
         </div>
       </div>
     </Tabs.Content>

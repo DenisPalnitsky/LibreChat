@@ -8,8 +8,13 @@ const { sleep } = require('~/server/utils');
 const { logger } = require('~/config');
 const multer = require('multer');
 const jobScheduler = require('~/server/utils/jobScheduler');
-const { IMPORT_CONVERSATION_JOB_NAME } = require('~/server/utils/import/jobDefinition');
+const {
+  IMPORT_CONVERSATION_JOB_NAME,
+  EXPORT_CONVERSATION_JOB_NAME,
+} = require('~/server/utils/import/jobDefinition');
 const { createImportLimiters } = require('~/server/middleware');
+const os = require('os');
+const path = require('path');
 
 const router = express.Router();
 router.use(requireJwtAuth);
@@ -118,9 +123,19 @@ router.post('/import', importIpLimiter, importUserLimiter, async (req, res) => {
     res.status(500).send('Error processing file');
   }
 });
+//router.post('/export', importIpLimiter, importUserLimiter, async (req, res) => {
+router.post('/export', async (req, res) => {
+  try {
+    const job = await jobScheduler.now(EXPORT_CONVERSATION_JOB_NAME, '', req.user.id);
+    res.status(200).json({ message: 'Export started', jobId: job.id });
+  } catch (error) {
+    console.error('Error exporting conversations', error);
+    res.status(500).send('Error exporting conversations');
+  }
+});
 
-// Get the status of an import job for polling
-router.get('/import/jobs/:jobId', async (req, res) => {
+// put this in a function
+const jobStatusHandler = async (req, res) => {
   try {
     const { jobId } = req.params;
     const { userId, ...jobStatus } = await jobScheduler.getJobStatus(jobId);
@@ -136,6 +151,34 @@ router.get('/import/jobs/:jobId', async (req, res) => {
   } catch (error) {
     console.error('Error getting job details', error);
     res.status(500).send('Error getting job details');
+  }
+};
+
+// Get the status of an import job for polling
+router.get('/import/jobs/:jobId', jobStatusHandler);
+
+// Get the status of an export job for polling
+router.get('/export/jobs/:jobId', jobStatusHandler);
+
+router.get('/export/jobs/:jobId/conversations.json', async (req, res) => {
+  logger.info('Downloading JSON file');
+  try {
+    //put this in a function
+    const { jobId } = req.params;
+    const tempDir = os.tmpdir();
+    const filePath = path.join(tempDir, `export-${jobId}`);
+
+    res.setHeader('Content-Type', 'application/json');
+
+    res.sendFile(filePath, (err) => {
+      if (err) {
+        console.error(err);
+        res.status(500).send('An error occurred');
+      }
+    });
+  } catch (error) {
+    console.error('Error downloading JSON file', error);
+    res.status(500).send('Error downloading JSON file');
   }
 });
 
