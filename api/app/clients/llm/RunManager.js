@@ -1,6 +1,7 @@
 const { createStartHandler } = require('~/app/clients/callbacks');
 const { spendTokens } = require('~/models/spendTokens');
 const { logger } = require('~/config');
+const { isUserAbortError } = require('~/utils');
 
 class RunManager {
   constructor(fields) {
@@ -84,7 +85,13 @@ class RunManager {
           await spendTokens(txData, tokenUsage);
         },
         handleLLMError: async (err) => {
-          logger.error(`[RunManager] handleLLMError: ${JSON.stringify(metadata)}`, err);
+          // Don't log error if abort was initiated by the user
+          if (isUserAbortError(err)) {
+            logger.info(`[RunManager] Request aborted: ${JSON.stringify(metadata)}`);
+          } else {
+            logger.error(`[RunManager] handleLLMError: ${JSON.stringify(metadata)}`, err);
+          }
+
           if (metadata.context === 'title') {
             return;
           } else if (metadata.context === 'plugins') {

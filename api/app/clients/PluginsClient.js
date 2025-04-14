@@ -7,7 +7,7 @@ const { processFileURL } = require('~/server/services/Files/process');
 const { EModelEndpoint } = require('librechat-data-provider');
 const { checkBalance } = require('~/models/balanceMethods');
 const { formatLangChainMessages } = require('./prompts');
-const { extractBaseURL } = require('~/utils');
+const { extractBaseURL, isUserAbortError } = require('~/utils');
 const { loadTools } = require('./tools/util');
 const { logger } = require('~/config');
 
@@ -214,14 +214,25 @@ class PluginsClient extends OpenAIClient {
         ]);
         break; // Exit the loop if the function call is successful
       } catch (err) {
-        logger.error('[PluginsClient] executorCall error:', err);
-        if (attempts === maxAttempts) {
+        // If user initiated the abort then it's not an error
+        if (isUserAbortError(err)) {
+          logger.info('[PluginsClient] Request aborted:', { conversationId: this.conversationId });
           const { run } = this.runManager.getRunByConversationId(this.conversationId);
-          const defaultOutput = `Encountered an error while attempting to respond: ${err.message}`;
+          const defaultOutput = 'User aborted the request';
           this.result.output = run && run.error ? run.error : defaultOutput;
-          this.result.errorMessage = run && run.error ? run.error : err.message;
           this.result.intermediateSteps = this.actions;
           break;
+        } else {
+          // Only log as error for non-abort errors
+          logger.error('[PluginsClient] executorCall error:', err);
+          if (attempts === maxAttempts) {
+            const { run } = this.runManager.getRunByConversationId(this.conversationId);
+            const defaultOutput = `Encountered an error while attempting to respond: ${err.message}`;
+            this.result.output = run && run.error ? run.error : defaultOutput;
+            this.result.errorMessage = run && run.error ? run.error : err.message;
+            this.result.intermediateSteps = this.actions;
+            break;
+          }
         }
       }
     }
